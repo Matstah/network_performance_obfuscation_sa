@@ -1,0 +1,28 @@
+Accepted connection from 10.1.1.2, port 39448
+[  5] local 10.11.2.2 port 5201 connected to 10.1.1.2 port 39450
+[ ID] Interval           Transfer     Bandwidth
+[  5]   0.00-1.00   sec   925 KBytes  7.58 Mbits/sec                  
+[  5]   1.00-2.00   sec  1003 KBytes  8.21 Mbits/sec                  
+[  5]   2.00-3.00   sec  1.06 MBytes  8.91 Mbits/sec                  
+[  5]   3.00-4.00   sec   950 KBytes  7.78 Mbits/sec                  
+[  5]   4.00-5.00   sec  1.05 MBytes  8.78 Mbits/sec                  
+[  5]   5.00-6.00   sec   994 KBytes  8.15 Mbits/sec                  
+[  5]   6.00-7.00   sec  1.06 MBytes  8.85 Mbits/sec                  
+[  5]   7.00-8.00   sec  1.00 MBytes  8.42 Mbits/sec                  
+[  5]   8.00-9.00   sec  1.03 MBytes  8.61 Mbits/sec                  
+[  5]   9.00-10.00  sec  1.01 MBytes  8.50 Mbits/sec                  
+[  5]  10.00-11.00  sec  1.02 MBytes  8.58 Mbits/sec                  
+[  5]  11.00-12.00  sec  1.03 MBytes  8.66 Mbits/sec                  
+[  5]  12.00-13.00  sec  1.02 MBytes  8.57 Mbits/sec                  
+[  5]  13.00-14.00  sec  1.01 MBytes  8.52 Mbits/sec                  
+[  5]  14.00-15.00  sec  1.01 MBytes  8.44 Mbits/sec                  
+[  5]  15.00-16.00  sec  1.06 MBytes  8.92 Mbits/sec                  
+[  5]  16.00-17.00  sec   953 KBytes  7.81 Mbits/sec                  
+[  5]  17.00-18.00  sec   991 KBytes  8.12 Mbits/sec                  
+[  5]  18.00-19.00  sec  1.04 MBytes  8.70 Mbits/sec                  
+[  5]  19.00-20.00  sec   928 KBytes  7.60 Mbits/sec                  
+[  5]  20.00-20.06  sec  29.7 KBytes  4.43 Mbits/sec                  
+- - - - - - - - - - - - - - - - - - - - - - - - -
+[ ID] Interval           Transfer     Bandwidth
+[  5]   0.00-20.06  sec  0.00 Bytes  0.00 bits/sec                  sender
+[  5]   0.00-20.06  sec  20.0 MBytes  8.37 Mbits/sec                  receiver

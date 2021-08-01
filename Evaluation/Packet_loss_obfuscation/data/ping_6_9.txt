@@ -1,0 +1,5 @@
+PING 10.2.2.2 (10.2.2.2) 56(84) bytes of data.
+..................................................    
+--- 10.2.2.2 ping statistics ---
+1000 packets transmitted, 950 received, 5% packet loss, time 14224ms
+rtt min/avg/max/mdev = 40.679/42.965/91.012/3.439 ms, pipe 5, ipg/ewma 14.238/43.471 ms

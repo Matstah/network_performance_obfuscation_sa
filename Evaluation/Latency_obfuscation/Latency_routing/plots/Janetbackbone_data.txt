@@ -1,0 +1,9 @@
+name of network: Janetbackbone
+number of nodes: 28
+number of edges: 43
+average degree per node: 1.5357142857142858
+network size: 5469
+max link size: 296
+min link size: 1
+median link size: 112.0
+average link site: 127.18604651162791

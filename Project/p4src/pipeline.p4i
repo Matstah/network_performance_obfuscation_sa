@@ -1,0 +1,1679 @@
+# 1 "p4src/pipeline.p4"
+# 1 "<built-in>"
+# 1 "<command-line>"
+# 1 "p4src/pipeline.p4"
+/* -*- P4_16 -*- */
+# 1 "/usr/local/share/p4c/p4include/core.p4" 1
+/*
+Copyright 2013-present Barefoot Networks, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+/* This is the P4-16 core library, which declares some built-in P4 constructs using P4 */
+
+
+
+
+/// Standard error codes.  New error codes can be declared by users.
+error {
+    NoError, /// No error.
+    PacketTooShort, /// Not enough bits in packet for 'extract'.
+    NoMatch, /// 'select' expression has no matches.
+    StackOutOfBounds, /// Reference to invalid element of a header stack.
+    HeaderTooShort, /// Extracting too many bits into a varbit field.
+    ParserTimeout /// Parser execution time limit exceeded.
+}
+
+extern packet_in {
+    /// Read a header from the packet into a fixed-sized header @hdr and advance the cursor.
+    /// May trigger error PacketTooShort or StackOutOfBounds.
+    /// @T must be a fixed-size header type
+    void extract<T>(out T hdr);
+    /// Read bits from the packet into a variable-sized header @variableSizeHeader
+    /// and advance the cursor.
+    /// @T must be a header containing exactly 1 varbit field.
+    /// May trigger errors PacketTooShort, StackOutOfBounds, or HeaderTooShort.
+    void extract<T>(out T variableSizeHeader,
+                    in bit<32> variableFieldSizeInBits);
+    /// Read bits from the packet without advancing the cursor.
+    /// @returns: the bits read from the packet.
+    /// T may be an arbitrary fixed-size type.
+    T lookahead<T>();
+    /// Advance the packet cursor by the specified number of bits.
+    void advance(in bit<32> sizeInBits);
+    /// @return packet length in bytes.  This method may be unavailable on
+    /// some target architectures.
+    bit<32> length();
+}
+
+extern packet_out {
+    /// Write @hdr into the output packet, advancing cursor.
+    /// @T can be a header type, a header stack, a header_union, or a struct
+    /// containing fields with such types.
+    void emit<T>(in T hdr);
+}
+
+// TODO: remove from this file, convert to built-in
+/// Check a predicate @check in the parser; if the predicate is true do nothing,
+/// otherwise set the parser error to @toSignal, and transition to the `reject` state.
+extern void verify(in bool check, in error toSignal);
+
+/// Built-in action that does nothing.
+action NoAction() {}
+
+/// Standard match kinds for table key fields.
+/// Some architectures may not support all these match kinds.
+/// Architectures can declare additional match kinds.
+match_kind {
+    /// Match bits exactly.
+    exact,
+    /// Ternary match, using a mask.
+    ternary,
+    /// Longest-prefix match.
+    lpm
+}
+# 3 "p4src/pipeline.p4" 2
+# 1 "/usr/local/share/p4c/p4include/v1model.p4" 1
+/*
+Copyright 2013-present Barefoot Networks, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+/* P4-16 declaration of the P4 v1.0 switch model */
+
+
+
+
+# 1 "/usr/local/share/p4c/p4include/core.p4" 1
+/*
+Copyright 2013-present Barefoot Networks, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+/* This is the P4-16 core library, which declares some built-in P4 constructs using P4 */
+# 23 "/usr/local/share/p4c/p4include/v1model.p4" 2
+
+match_kind {
+    range,
+    // Used for implementing dynamic_action_selection
+    selector
+}
+
+// Are these correct?
+@metadata @name("standard_metadata")
+struct standard_metadata_t {
+    bit<9> ingress_port;
+    bit<9> egress_spec;
+    bit<9> egress_port;
+    bit<32> clone_spec;
+    bit<32> instance_type;
+    // The drop and recirculate_port fields are not used at all by the
+    // behavioral-model simple_switch software switch as of September
+    // 2018, and perhaps never was.  They may be considered
+    // deprecated, at least for that P4 target device.  simple_switch
+    // uses the value of the egress_spec field to determine whether a
+    // packet is dropped or not, and it is recommended to use the
+    // P4_14 drop() primitive action, or the P4_16 + v1model
+    // mark_to_drop() primitive action, to cause that field to be
+    // changed so the packet will be dropped.
+    bit<1> drop;
+    bit<16> recirculate_port;
+    bit<32> packet_length;
+    //
+    // @alias is used to generate the field_alias section of the BMV2 JSON.
+    // Field alias creates a mapping from the metadata name in P4 program to
+    // the behavioral model's internal metadata name. Here we use it to
+    // expose all metadata supported by simple switch to the user through
+    // standard_metadata_t.
+    //
+    // flattening fields that exist in bmv2-ss
+    // queueing metadata
+    @alias("queueing_metadata.enq_timestamp") bit<32> enq_timestamp;
+    @alias("queueing_metadata.enq_qdepth") bit<19> enq_qdepth;
+    @alias("queueing_metadata.deq_timedelta") bit<32> deq_timedelta;
+    @alias("queueing_metadata.deq_qdepth") bit<19> deq_qdepth;
+    // intrinsic metadata
+    @alias("intrinsic_metadata.ingress_global_timestamp") bit<48> ingress_global_timestamp;
+    @alias("intrinsic_metadata.egress_global_timestamp") bit<48> egress_global_timestamp;
+    @alias("intrinsic_metadata.lf_field_list") bit<32> lf_field_list;
+    @alias("intrinsic_metadata.mcast_grp") bit<16> mcast_grp;
+    @alias("intrinsic_metadata.resubmit_flag") bit<32> resubmit_flag;
+    @alias("intrinsic_metadata.egress_rid") bit<16> egress_rid;
+    /// Indicates that a verify_checksum() method has failed.
+    // 1 if a checksum error was found, otherwise 0.
+    bit<1> checksum_error;
+    @alias("intrinsic_metadata.recirculate_flag") bit<32> recirculate_flag;
+    /// Error produced by parsing
+    error parser_error;
+}
+
+enum CounterType {
+    packets,
+    bytes,
+    packets_and_bytes
+}
+
+enum MeterType {
+    packets,
+    bytes
+}
+
+extern counter {
+    counter(bit<32> size, CounterType type);
+    void count(in bit<32> index);
+}
+
+extern direct_counter {
+    direct_counter(CounterType type);
+    void count();
+}
+
+extern meter {
+    meter(bit<32> size, MeterType type);
+    void execute_meter<T>(in bit<32> index, out T result);
+}
+
+extern direct_meter<T> {
+    direct_meter(MeterType type);
+    void read(out T result);
+}
+
+extern register<T> {
+    register(bit<32> size);
+    void read(out T result, in bit<32> index);
+    void write(in bit<32> index, in T value);
+}
+
+// used as table implementation attribute
+extern action_profile {
+    action_profile(bit<32> size);
+}
+
+// Get a random number in the range lo..hi
+extern void random<T>(out T result, in T lo, in T hi);
+// If the type T is a named struct, the name is used
+// to generate the control-plane API.
+extern void digest<T>(in bit<32> receiver, in T data);
+
+enum HashAlgorithm {
+    crc32,
+    crc32_custom,
+    crc16,
+    crc16_custom,
+    random,
+    identity,
+    csum16,
+    xor16
+}
+
+extern void mark_to_drop();
+extern void hash<O, T, D, M>(out O result, in HashAlgorithm algo, in T base, in D data, in M max);
+
+extern action_selector {
+    action_selector(HashAlgorithm algorithm, bit<32> size, bit<32> outputWidth);
+}
+
+enum CloneType {
+    I2E,
+    E2E
+}
+
+@deprecated("Please use verify_checksum/update_checksum instead.")
+extern Checksum16 {
+    Checksum16();
+    bit<16> get<D>(in D data);
+}
+
+/**
+Verifies the checksum of the supplied data.
+If this method detects that a checksum of the data is not correct it
+sets the standard_metadata checksum_error bit.
+@param T          Must be a tuple type where all the fields are bit-fields or varbits.
+                  The total dynamic length of the fields is a multiple of the output size.
+@param O          Checksum type; must be bit<X> type.
+@param condition  If 'false' the verification always succeeds.
+@param data       Data whose checksum is verified.
+@param checksum   Expected checksum of the data; note that is must be a left-value.
+@param algo       Algorithm to use for checksum (not all algorithms may be supported).
+                  Must be a compile-time constant.
+*/
+extern void verify_checksum<T, O>(in bool condition, in T data, inout O checksum, HashAlgorithm algo);
+/**
+Computes the checksum of the supplied data.
+@param T          Must be a tuple type where all the fields are bit-fields or varbits.
+                  The total dynamic length of the fields is a multiple of the output size.
+@param O          Output type; must be bit<X> type.
+@param condition  If 'false' the checksum is not changed
+@param data       Data whose checksum is computed.
+@param checksum   Checksum of the data.
+@param algo       Algorithm to use for checksum (not all algorithms may be supported).
+                  Must be a compile-time constant.
+*/
+extern void update_checksum<T, O>(in bool condition, in T data, inout O checksum, HashAlgorithm algo);
+
+/**
+Verifies the checksum of the supplied data including the payload.
+The payload is defined as "all bytes of the packet which were not parsed by the parser".
+If this method detects that a checksum of the data is not correct it
+sets the standard_metadata checksum_error bit.
+@param T          Must be a tuple type where all the fields are bit-fields or varbits.
+                  The total dynamic length of the fields is a multiple of the output size.
+@param O          Checksum type; must be bit<X> type.
+@param condition  If 'false' the verification always succeeds.
+@param data       Data whose checksum is verified.
+@param checksum   Expected checksum of the data; note that is must be a left-value.
+@param algo       Algorithm to use for checksum (not all algorithms may be supported).
+                  Must be a compile-time constant.
+*/
+extern void verify_checksum_with_payload<T, O>(in bool condition, in T data, inout O checksum, HashAlgorithm algo);
+/**
+Computes the checksum of the supplied data including the payload.
+The payload is defined as "all bytes of the packet which were not parsed by the parser".
+@param T          Must be a tuple type where all the fields are bit-fields or varbits.
+                  The total dynamic length of the fields is a multiple of the output size.
+@param O          Output type; must be bit<X> type.
+@param condition  If 'false' the checksum is not changed
+@param data       Data whose checksum is computed.
+@param checksum   Checksum of the data.
+@param algo       Algorithm to use for checksum (not all algorithms may be supported).
+                  Must be a compile-time constant.
+*/
+extern void update_checksum_with_payload<T, O>(in bool condition, in T data, inout O checksum, HashAlgorithm algo);
+
+extern void resubmit<T>(in T data);
+extern void recirculate<T>(in T data);
+extern void clone(in CloneType type, in bit<32> session);
+extern void clone3<T>(in CloneType type, in bit<32> session, in T data);
+
+extern void truncate(in bit<32> length);
+
+// The name 'standard_metadata' is reserved
+
+// Architecture.
+// M should be a struct of structs
+// H should be a struct of headers, stacks or header_unions
+
+parser Parser<H, M>(packet_in b,
+                    out H parsedHdr,
+                    inout M meta,
+                    inout standard_metadata_t standard_metadata);
+
+/* The only legal statements in the implementation of the
+VerifyChecksum control are: block statements, calls to the
+verify_checksum and verify_checksum_with_payload methods,
+and return statements. */
+control VerifyChecksum<H, M>(inout H hdr,
+                             inout M meta);
+@pipeline
+control Ingress<H, M>(inout H hdr,
+                      inout M meta,
+                      inout standard_metadata_t standard_metadata);
+@pipeline
+control Egress<H, M>(inout H hdr,
+                     inout M meta,
+                     inout standard_metadata_t standard_metadata);
+
+/* The only legal statements in the implementation of the
+ComputeChecksum control are: block statements, calls to the
+update_checksum and update_checksum_with_payload methods,
+and return statements. */
+control ComputeChecksum<H, M>(inout H hdr,
+                              inout M meta);
+@deparser
+control Deparser<H>(packet_out b, in H hdr);
+
+package V1Switch<H, M>(Parser<H, M> p,
+                       VerifyChecksum<H, M> vr,
+                       Ingress<H, M> ig,
+                       Egress<H, M> eg,
+                       ComputeChecksum<H, M> ck,
+                       Deparser<H> dep
+                       );
+# 4 "p4src/pipeline.p4" 2
+
+
+/************   C O N S T A N T S  AND H E A D E R S *************/
+
+
+# 1 "p4src/include/headers.p4" 1
+/*************************************************************************
+*********************** H E A D E R S  ***********************************
+*************************************************************************/
+
+const bit<16> TYPE_IPV4 = 0x800;
+const bit<16> TYPE_START_MEASUREMENT = 0x2000;
+const bit<16> TYPE_LINK_LATENCY = 0x1000;
+const bit<16> TYPE_SRCROUTING = 0x1111;
+
+
+
+typedef bit<9> egressSpec_t;
+typedef bit<48> macAddr_t;
+typedef bit<32> ip4Addr_t;
+
+
+
+header ethernet_t { //2*6 + 2 = 14bytes
+    macAddr_t dstAddr;
+    macAddr_t srcAddr;
+    bit<16> etherType;
+}
+
+
+/// S O U R C E - R O U T I N G ///
+header srcRoute_t {
+    bit<7> port;
+    bit<1> bos; //Bottom Of Stack
+}
+
+typedef srcRoute_t[9] srcRoute_stack;
+
+/// I p v 4 ///
+header ipv4_t { //
+    bit<4> version;
+    bit<4> ihl;
+    bit<6> dscp;
+    bit<2> ecn;
+    bit<16> totalLen;
+    bit<16> identification;
+    bit<3> flags;
+    bit<13> fragOffset;
+    bit<8> ttl;
+    bit<8> protocol;
+    bit<16> hdrChecksum;
+    ip4Addr_t srcAddr;
+    ip4Addr_t dstAddr;
+}
+
+/// U D P ///
+header udp_t {
+    bit<16> srcPort;
+    bit<16> dstPort;
+    bit<16> len;
+    bit<16> checksum;
+}
+
+/// T C P + O P T I O N S ///
+header tcp_t{
+    bit<16> srcPort;
+    bit<16> dstPort;
+    bit<32> seqNo;
+    bit<32> ackNo;
+    bit<4> dataOffset; //up to 40 bytes of options in the header.. defines total header length, max 60bytes
+    bit<4> res;
+    bit<1> cwr;
+    bit<1> ece;
+    bit<1> urg;
+    bit<1> ack;
+    bit<1> psh;
+    bit<1> rst;
+    bit<1> syn;
+    bit<1> fin;
+    bit<16> window;
+    bit<16> checksum;
+    bit<16> urgentPtr;
+}
+
+// tcp option as varbit
+header tcp_options_t {
+    varbit<320> options;
+}
+
+/// P A Y L O A D    S A M P L E ///
+header sample_payload_t{
+    bit<192> payload; //24 bytes
+}
+
+/// C O N T R O L E R - H E A D E R S///
+header controller_t{
+    bit<8> cloneType;
+    bit<16> etherType;
+}
+
+/// I C M P - H E A D E R ///
+header icmp_t {
+   bit<8> type;
+   bit<8> code;
+   bit<16> checksum;
+   bit<32> unused;
+}
+
+struct metadata {
+    // traffic types to classify
+    bit<1> ping;
+    bit<1> iperf;
+    bit<1> tcp;
+    bit<1> udp;
+    bit<1> ipv4;
+
+    // Traceroute classification
+    bit<8> nr_hops_on_path;
+
+    //reply icmp echos
+    bit<1> src_routing;
+
+    // iperf traffic classification
+    bit<2> sm_state;
+    bit<16> int1;
+    bit<16> int2;
+    bit<16> int3;
+    bit<16> int4;
+    bit<16> int5;
+    bit<16> b_index1;
+    bit<16> b_index2;
+    bit<32> b_value1;
+    bit<32> b_value2;
+    bit<16> sm_index;
+    bit<16> tcp_payload_len;
+    bit<16> tcp_mss;
+
+    //used to tell switch what is possible on link..
+    //bit<1> entry_type; // 0=link from ext, 1= link from intern. if next link is under our control/ oposite switch ours..
+    //bit<2> travel_type; // 0=int-ext, 1=ext-int, 2=int-int, 3=ext-ext,
+    //bit<8> e2e_id;
+
+    //used for bandwidth calculation
+    bit<32> loss_rate; //basically meter tag
+    bit<16> tcp_window;
+    bit<8> tcp_w_scale;
+
+    // given as input parameters
+    bit<3> obf_type;
+    bit<8> path_id;
+    //bit<16> w_size;
+    bit<10> pack_loss_rate;
+    //bit<3> meter_id; // 2³ = 8 diff meters..
+    bit<16> bw;
+    bit<4> ttl_to_subtract;
+
+    //used for loss rate/ rate limiting
+    bit<32> meter_tag;
+    bit<32> meter_index;
+
+    //used for tcp checksum
+    bit<16> tcp_totalLen;
+    bit<8> reserved;
+}
+
+error {
+    TcpDataOffsetTooSmall/*,
+    TcpOptionTooLongForHeader,
+    TcpBadSackOptionLength*/
+}
+
+struct headers {
+    ethernet_t ethernet;
+    ipv4_t ipv4_icmp;
+    icmp_t icmp;
+    ipv4_t ipv4;
+    udp_t udp;
+    tcp_t tcp;
+    tcp_options_t tcp_options;//tcp option as varbit
+    controller_t controller;
+    sample_payload_t payload;
+    srcRoute_stack srcRoutes;
+}
+# 10 "p4src/pipeline.p4" 2
+# 1 "p4src/include/parsers.p4" 1
+/*************************************************************************
+*********************** P A R S E R  *******************************
+*************************************************************************/
+
+/******* MAIN PARSER **********/
+parser MyParser(packet_in packet,
+                out headers hdr,
+                inout metadata meta,
+                inout standard_metadata_t standard_metadata) {
+
+    state start {
+        transition parse_ethernet;
+    }
+    state parse_ethernet {
+        packet.extract(hdr.ethernet);
+        transition select(hdr.ethernet.etherType){
+            TYPE_IPV4: parse_ipv4;
+            TYPE_SRCROUTING : parse_source_routing;
+            default: accept;
+        }
+    }
+
+    state parse_source_routing {
+        packet.extract(hdr.srcRoutes.next);
+        transition select(hdr.srcRoutes.last.bos) {
+            1: parse_ipv4;
+            0: parse_source_routing; //lets us loop, till bottom of stack reached..
+            default : accept;
+        }
+    }
+    state parse_ipv4 {
+        packet.extract(hdr.ipv4);
+        transition select(hdr.ipv4.protocol){
+            1 : parse_icmp;
+            17: parse_udp;
+            6 : parse_tcp;
+            200: parse_tcp;
+            //17 : parse_udp;
+            default : accept;
+        }
+    }
+    state parse_icmp {
+        packet.extract(hdr.icmp);
+        transition accept;
+    }
+    state parse_udp{
+        packet.extract(hdr.udp);
+        transition accept;
+    }
+    state parse_tcp {
+        packet.extract(hdr.tcp);
+        //for checksum calculation
+        meta.tcp_totalLen = hdr.ipv4.totalLen - ((bit<16>)hdr.ipv4.ihl * 4); // subtract ip header, no option= 5*32 bits = 20bytes
+        meta.reserved = 0;
+        transition select(hdr.tcp.dataOffset){
+            5 :accept;
+            default: parse_tcp_option;
+        }
+    }
+    state parse_tcp_option {
+        transition select(hdr.ipv4.protocol){
+            6 : parse_tcp_option_as_varbit;
+        }
+    }
+    state parse_tcp_option_as_varbit {
+        bit<4> n = hdr.tcp.dataOffset - 5;
+        packet.extract(hdr.tcp_options, (bit<32>) ((bit<32>)n * 32)); //void extract<T>(out T headerLvalue, in bit<32> variableFieldSize);  // variableFieldSize = number of bits to be extracted
+        transition parse_payload;
+    }
+    state parse_payload {
+        meta.tcp_payload_len = meta.tcp_totalLen - ((bit<16>)hdr.tcp.dataOffset * 4);
+        transition select(meta.tcp_payload_len){
+            //payload < 24 bytes
+            0 : accept; 1 : accept; 2 : accept; 3 : accept; 4 : accept;
+            5 : accept; 6 : accept; 7 : accept; 8 : accept; 9 : accept;
+            10 : accept;11 : accept; 12 : accept; 13 : accept; 14 : accept;
+            15 : accept; 16 : accept; 17 : accept; 18 : accept; 19 : accept;
+            20 : accept; 21 : accept; 22 : accept; 23 : accept;
+            default : extract_payload; // payload.len >= 24 bytes
+        }
+    }
+    state extract_payload {
+        packet.extract(hdr.payload); //first 24 bytes of payload
+        transition accept;
+    }
+}
+
+/*************************************************************************
+***********************  D E P A R S E R  *******************************
+*************************************************************************/
+
+control MyDeparser(packet_out packet, in headers hdr) {
+    apply {
+
+        //parsed headers have to be added again into the packet.
+        packet.emit(hdr.ethernet);
+
+        //srcRouting header
+        packet.emit(hdr.srcRoutes);
+
+        packet.emit(hdr.ipv4);
+
+        //if icmp traceroute response:
+        packet.emit(hdr.icmp);
+        packet.emit(hdr.ipv4_icmp);
+
+        //Depars Network and Transport layer:
+        packet.emit(hdr.udp);
+
+        packet.emit(hdr.tcp);
+        packet.emit(hdr.tcp_options); //tcp option as varbit
+
+        packet.emit(hdr.payload);
+
+    }
+}
+# 11 "p4src/pipeline.p4" 2
+
+
+
+//#define TIMESTAMP_WIDTH 48
+//#define NR_OF_PORTS 20
+//#define NR_BITS_FOR_AVERAGE_COUNTER 2 //wide for counter = 2 bit: 0,1,2,3 possible, then overflow
+//#define NR_RTT_CELLS_FOR_AVERAGE_MEASUREMENT 80 //4*20 = 80, each port needs to track 4 rtt'mes, that will be used to calculate average rtt
+
+
+
+typedef bit<2> meter_color_t;
+
+const bit<32> meter_length = 16384;
+
+
+/*************************************************************************
+************   C H E C K S U M    V E R I F I C A T I O N   *************
+*************************************************************************/
+
+control MyVerifyChecksum(inout headers hdr, inout metadata meta) {
+
+    apply {
+    }
+}
+
+/*************************************************************************
+**************  I N G R E S S   P R O C E S S I N G   *******************
+*************************************************************************/
+
+control MyIngress(inout headers hdr,
+                  inout metadata meta,
+                  inout standard_metadata_t standard_metadata) {
+
+// INCLUDES
+# 1 "p4src/ingress/ipv4_routing.p4" 1
+/******** All functions for ipv4 routing********/
+
+// drops packet
+action drop() {
+    mark_to_drop();
+}
+
+
+// set correct ethernet values when leaving network
+action set_nhop(macAddr_t dstAddr, egressSpec_t port) {
+    //set the number of hops packet would make on lpm ip routing path
+
+    //set the src mac address as the previous dst, this is not correct right?
+    hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
+
+   //set the destination mac address that we got from the match in the table
+    hdr.ethernet.dstAddr = dstAddr;
+
+    //set the output port that we also get from the table
+    standard_metadata.egress_spec = port;
+
+    //decrease ttl by 1
+    hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
+}
+
+//forwarding
+table ipv4_lpm {
+    key = {
+        hdr.ipv4.dstAddr: lpm;
+    }
+    actions = {
+        set_nhop;
+        drop;
+    }
+    size = 1024;
+    default_action = drop;
+}
+
+// to tell switch what ip it has.
+table is_it_me {
+    key = {
+        hdr.ipv4.dstAddr : exact;
+    }
+    actions = {
+        NoAction;
+    }
+    size = 1;
+}
+# 46 "p4src/pipeline.p4" 2
+# 1 "p4src/ingress/src_routing.p4" 1
+/******** All functions for ipv4 routing********/
+
+/*
+//IP routing at network edge
+action drop() {
+    mark_to_drop();
+}
+
+action set_nhop(macAddr_t dstAddr, egressSpec_t port) {
+
+    //set the src mac address as the previous dst, this is not correct right?
+    hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
+
+   //set the destination mac address that we got from the match in the table
+    hdr.ethernet.dstAddr = dstAddr;
+
+    //set the output port that we also get from the table
+    standard_metadata.egress_spec = port;
+
+    //decrease ttl by 1
+    hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
+}
+*/
+
+//routing based on src header
+action srcRoute_nhop() {
+    standard_metadata.egress_spec = (bit<9>)hdr.srcRoutes[0].port;
+    hdr.srcRoutes.pop_front(1); // pops one from stack..
+}
+
+action srcRoute_finish() {
+    hdr.ethernet.etherType = TYPE_IPV4;
+}
+
+
+//setup of src routing header
+//action set_nhop(macAddr_t dstAddr, egressSpec_t port) defined in traceroute..
+action hop0(bit<4> ttl, bit<9> port0){
+    standard_metadata.egress_spec = port0;
+    hdr.ipv4.ttl = hdr.ipv4.ttl - (bit<8>)ttl;
+    meta.src_routing = 1;
+}
+
+action hop1(bit<4> ttl, bit<9> port0, bit<7> port) {
+    standard_metadata.egress_spec = port0;
+    hdr.ethernet.etherType = TYPE_SRCROUTING;
+    hdr.ipv4.ttl = hdr.ipv4.ttl - (bit<8>)ttl;
+
+    hdr.srcRoutes[0].setValid();
+    hdr.srcRoutes[0].port = port;
+    hdr.srcRoutes[0].bos = 1;
+}
+
+action hop2(bit<4> ttl, bit<9> port0, bit<7> port1, bit<7> port2) {
+    hdr.ethernet.etherType = TYPE_SRCROUTING;
+    standard_metadata.egress_spec = port0;
+    hdr.ipv4.ttl = hdr.ipv4.ttl - (bit<8>)ttl;
+
+    hdr.srcRoutes[0].setValid();
+    hdr.srcRoutes[0].port = port1;
+    hdr.srcRoutes[0].bos = 0;
+
+    hdr.srcRoutes[1].setValid();
+    hdr.srcRoutes[1].port = port2;
+    hdr.srcRoutes[1].bos = 1;
+}
+
+action hop3(bit<4> ttl, bit<9> port0, bit<7> port1, bit<7> port2, bit<7> port3) {
+    hdr.ethernet.etherType = TYPE_SRCROUTING;
+    standard_metadata.egress_spec = port0;
+    hdr.ipv4.ttl = hdr.ipv4.ttl - (bit<8>)ttl;
+
+    hdr.srcRoutes[0].setValid();
+    hdr.srcRoutes[0].port = port1;
+    hdr.srcRoutes[0].bos = 0;
+
+    hdr.srcRoutes[1].setValid();
+    hdr.srcRoutes[1].port = port2;
+    hdr.srcRoutes[1].bos = 0;
+
+    hdr.srcRoutes[2].setValid();
+    hdr.srcRoutes[2].port = port3;
+    hdr.srcRoutes[2].bos = 1;
+}
+
+action hop4(bit<4> ttl, bit<9> port0, bit<7> port1, bit<7> port2, bit<7> port3, bit<7> port4) {
+    hdr.ethernet.etherType = TYPE_SRCROUTING;
+    standard_metadata.egress_spec = port0;
+    hdr.ipv4.ttl = hdr.ipv4.ttl - (bit<8>)ttl;
+
+    hdr.srcRoutes[0].setValid();
+    hdr.srcRoutes[0].port = port1;
+    hdr.srcRoutes[0].bos = 0;
+
+    hdr.srcRoutes[1].setValid();
+    hdr.srcRoutes[1].port = port2;
+    hdr.srcRoutes[1].bos = 0;
+
+    hdr.srcRoutes[2].setValid();
+    hdr.srcRoutes[2].port = port3;
+    hdr.srcRoutes[2].bos = 0;
+
+    hdr.srcRoutes[3].setValid();
+    hdr.srcRoutes[3].port = port4;
+    hdr.srcRoutes[3].bos = 1;
+}
+
+action hop5(bit<4> ttl, bit<9> port0, bit<7> port1, bit<7> port2, bit<7> port3, bit<7> port4, bit<7> port5) {
+    hdr.ethernet.etherType = TYPE_SRCROUTING;
+    standard_metadata.egress_spec = port0;
+    hdr.ipv4.ttl = hdr.ipv4.ttl - (bit<8>)ttl;
+
+    hdr.srcRoutes[0].setValid();
+    hdr.srcRoutes[0].port = port1;
+    hdr.srcRoutes[0].bos = 0;
+
+    hdr.srcRoutes[1].setValid();
+    hdr.srcRoutes[1].port = port2;
+    hdr.srcRoutes[1].bos = 0;
+
+    hdr.srcRoutes[2].setValid();
+    hdr.srcRoutes[2].port = port3;
+    hdr.srcRoutes[2].bos = 0;
+
+    hdr.srcRoutes[3].setValid();
+    hdr.srcRoutes[3].port = port4;
+    hdr.srcRoutes[3].bos = 0;
+
+    hdr.srcRoutes[4].setValid();
+    hdr.srcRoutes[4].port = port5;
+    hdr.srcRoutes[4].bos = 1;
+}
+
+action hop6(bit<4> ttl, bit<9> port0, bit<7> port1, bit<7> port2, bit<7> port3, bit<7> port4, bit<7> port5, bit<7> port6) {
+    hdr.ethernet.etherType = TYPE_SRCROUTING;
+    standard_metadata.egress_spec = port0;
+    hdr.ipv4.ttl = hdr.ipv4.ttl - (bit<8>)ttl;
+
+    hdr.srcRoutes[0].setValid();
+    hdr.srcRoutes[0].port = port1;
+    hdr.srcRoutes[0].bos = 0;
+
+    hdr.srcRoutes[1].setValid();
+    hdr.srcRoutes[1].port = port2;
+    hdr.srcRoutes[1].bos = 0;
+
+    hdr.srcRoutes[2].setValid();
+    hdr.srcRoutes[2].port = port3;
+    hdr.srcRoutes[2].bos = 0;
+
+    hdr.srcRoutes[3].setValid();
+    hdr.srcRoutes[3].port = port4;
+    hdr.srcRoutes[3].bos = 0;
+
+    hdr.srcRoutes[4].setValid();
+    hdr.srcRoutes[4].port = port5;
+    hdr.srcRoutes[4].bos = 0;
+
+    hdr.srcRoutes[5].setValid();
+    hdr.srcRoutes[5].port = port6;
+    hdr.srcRoutes[5].bos = 1;
+}
+
+action hop7(bit<4> ttl, bit<9> port0, bit<7> port1, bit<7> port2, bit<7> port3, bit<7> port4, bit<7> port5, bit<7> port6, bit<7> port7) {
+    hdr.ethernet.etherType = TYPE_SRCROUTING;
+    standard_metadata.egress_spec = port0;
+    hdr.ipv4.ttl = hdr.ipv4.ttl - (bit<8>)ttl;
+
+    hdr.srcRoutes[0].setValid();
+    hdr.srcRoutes[0].port = port1;
+    hdr.srcRoutes[0].bos = 0;
+
+    hdr.srcRoutes[1].setValid();
+    hdr.srcRoutes[1].port = port2;
+    hdr.srcRoutes[1].bos = 0;
+
+    hdr.srcRoutes[2].setValid();
+    hdr.srcRoutes[2].port = port3;
+    hdr.srcRoutes[2].bos = 0;
+
+    hdr.srcRoutes[3].setValid();
+    hdr.srcRoutes[3].port = port4;
+    hdr.srcRoutes[3].bos = 0;
+
+    hdr.srcRoutes[4].setValid();
+    hdr.srcRoutes[4].port = port5;
+    hdr.srcRoutes[4].bos = 0;
+
+    hdr.srcRoutes[5].setValid();
+    hdr.srcRoutes[5].port = port6;
+    hdr.srcRoutes[5].bos = 0;
+
+    hdr.srcRoutes[6].setValid();
+    hdr.srcRoutes[6].port = port7;
+    hdr.srcRoutes[6].bos = 1;
+}
+
+action hop8(bit<4> ttl, bit<9> port0, bit<7> port1, bit<7> port2, bit<7> port3, bit<7> port4, bit<7> port5, bit<7> port6, bit<7> port7, bit<7> port8) {
+    hdr.ethernet.etherType = TYPE_SRCROUTING;
+    standard_metadata.egress_spec = port0;
+    hdr.ipv4.ttl = hdr.ipv4.ttl - (bit<8>)ttl;
+
+    hdr.srcRoutes[0].setValid();
+    hdr.srcRoutes[0].port = port1;
+    hdr.srcRoutes[0].bos = 0;
+
+    hdr.srcRoutes[1].setValid();
+    hdr.srcRoutes[1].port = port2;
+    hdr.srcRoutes[1].bos = 0;
+
+    hdr.srcRoutes[2].setValid();
+    hdr.srcRoutes[2].port = port3;
+    hdr.srcRoutes[2].bos = 0;
+
+    hdr.srcRoutes[3].setValid();
+    hdr.srcRoutes[3].port = port4;
+    hdr.srcRoutes[3].bos = 0;
+
+    hdr.srcRoutes[4].setValid();
+    hdr.srcRoutes[4].port = port5;
+    hdr.srcRoutes[4].bos = 0;
+
+    hdr.srcRoutes[5].setValid();
+    hdr.srcRoutes[5].port = port6;
+    hdr.srcRoutes[5].bos = 0;
+
+    hdr.srcRoutes[6].setValid();
+    hdr.srcRoutes[6].port = port7;
+    hdr.srcRoutes[6].bos = 0;
+
+    hdr.srcRoutes[7].setValid();
+    hdr.srcRoutes[7].port = port8;
+    hdr.srcRoutes[7].bos = 1;
+}
+
+action hop9(bit<4> ttl, bit<9> port0, bit<7> port1, bit<7> port2, bit<7> port3, bit<7> port4, bit<7> port5, bit<7> port6, bit<7> port7, bit<7> port8, bit<7> port9) {
+    hdr.ethernet.etherType = TYPE_SRCROUTING;
+    standard_metadata.egress_spec = port0;
+    hdr.ipv4.ttl = hdr.ipv4.ttl - (bit<8>)ttl;
+
+    hdr.srcRoutes[0].setValid();
+    hdr.srcRoutes[0].port = port1;
+    hdr.srcRoutes[0].bos = 0;
+
+    hdr.srcRoutes[1].setValid();
+    hdr.srcRoutes[1].port = port2;
+    hdr.srcRoutes[1].bos = 0;
+
+    hdr.srcRoutes[2].setValid();
+    hdr.srcRoutes[2].port = port3;
+    hdr.srcRoutes[2].bos = 0;
+
+    hdr.srcRoutes[3].setValid();
+    hdr.srcRoutes[3].port = port4;
+    hdr.srcRoutes[3].bos = 0;
+
+    hdr.srcRoutes[4].setValid();
+    hdr.srcRoutes[4].port = port5;
+    hdr.srcRoutes[4].bos = 0;
+
+    hdr.srcRoutes[5].setValid();
+    hdr.srcRoutes[5].port = port6;
+    hdr.srcRoutes[5].bos = 0;
+
+    hdr.srcRoutes[6].setValid();
+    hdr.srcRoutes[6].port = port7;
+    hdr.srcRoutes[6].bos = 0;
+
+    hdr.srcRoutes[7].setValid();
+    hdr.srcRoutes[7].port = port8;
+    hdr.srcRoutes[7].bos = 0;
+
+    hdr.srcRoutes[8].setValid();
+    hdr.srcRoutes[8].port = port9;
+    hdr.srcRoutes[8].bos = 1;
+}
+
+table path_id_to_path {
+    key = {
+        meta.path_id : exact;
+    }
+    actions = {
+        NoAction;
+        hop0;
+        hop1;
+        hop2;
+        hop3;
+        hop4;
+        hop5;
+        hop6;
+        hop7;
+        hop8;
+        hop9;
+    }
+}
+# 47 "p4src/pipeline.p4" 2
+# 1 "p4src/ingress/iperf_classification.p4" 1
+register<bit<32>>(1024) iperf_bloom_filter;
+register<bit<2>>(1024) iperf_sm;
+register<bit<16>>(1024) iperf_tcp_opt_mss;
+
+
+action parse_payload(){
+    meta.int1 = hdr.payload.payload[79:64];
+    meta.int2 = hdr.payload.payload[63:48];
+    meta.int3 = hdr.payload.payload[47:32];
+    meta.int4 = hdr.payload.payload[31:16];
+    meta.int5 = hdr.payload.payload[15:0];
+}
+
+action calc_index_iperf_blom(){
+    hash(meta.b_index1, HashAlgorithm.crc16, (bit<1>)0,
+        { hdr.ipv4.srcAddr, hdr.ipv4.dstAddr, hdr.tcp.srcPort,
+          hdr.tcp.dstPort, hdr.ipv4.protocol}, (bit<32>)1024);
+    hash(meta.b_index2, HashAlgorithm.crc32, (bit<1>)0,
+        { hdr.ipv4.srcAddr, hdr.ipv4.dstAddr, hdr.tcp.srcPort,
+          hdr.tcp.dstPort, hdr.ipv4.protocol}, (bit<32>)1024);
+}
+
+action read_iperf_bloom(){
+    iperf_bloom_filter.read(meta.b_value1, (bit<32>)meta.b_index1);
+    iperf_bloom_filter.read(meta.b_value2, (bit<32>)meta.b_index2);
+}
+
+action remove_entry_in_iperf_bloom_filter(){
+    iperf_bloom_filter.write((bit<32>)meta.b_index1, meta.b_value1 - 1);
+    iperf_bloom_filter.write((bit<32>)meta.b_index2, meta.b_value2 - 1);
+}
+
+action set_entry_in_iperf_bloom_filter(){
+    iperf_bloom_filter.write((bit<32>)meta.b_index1, meta.b_value1 + 1);
+    iperf_bloom_filter.write((bit<32>)meta.b_index2, meta.b_value2 + 1);
+}
+
+action calc_index_iperf_sm(){
+    hash(meta.sm_index, HashAlgorithm.crc16, (bit<1>)0,
+        { hdr.ipv4.srcAddr, hdr.ipv4.dstAddr, hdr.tcp.srcPort,
+          hdr.tcp.dstPort, hdr.ipv4.protocol}, (bit<32>)1024);
+}
+action set_sm_to_start_state(){
+    iperf_sm.write((bit<32>)meta.sm_index, 0);
+}
+
+action set_sm_to_handshake_completed_state(){
+    iperf_sm.write((bit<32>)meta.sm_index, 1);
+}
+
+action set_sm_to_id_send_state(){
+    iperf_sm.write((bit<32>)meta.sm_index, 2);
+}
+
+action set_sm_to_default_state(){
+    iperf_sm.write((bit<32>)meta.sm_index, 3);
+}
+
+action read_iperf_sm_state(){
+    iperf_sm.read(meta.sm_state, (bit<32>)meta.sm_index);
+}
+
+action store_tcp_mss(){
+    iperf_tcp_opt_mss.write((bit<32>)meta.sm_index, meta.tcp_mss);
+}
+
+action read_tcp_mss_from_storage(){
+    iperf_tcp_opt_mss.read(meta.tcp_mss, (bit<32>)meta.sm_index);
+}
+
+
+table iperf_payload {
+    key = {
+        meta.int1 : exact;
+        meta.int2 : exact;
+        meta.int3 : exact;
+        meta.int4 : exact;
+        meta.int5 : exact;
+    }
+    actions = {
+        NoAction;
+        drop;
+    }
+    size = 10;
+}
+# 48 "p4src/pipeline.p4" 2
+# 1 "p4src/ingress/traceroutable.p4" 1
+action set_src_icmp_ip (bit<32> src_ip){
+    //hdr.ipv4_icmp.srcAddr = src_ip;
+    hdr.ipv4.srcAddr = src_ip;
+}
+
+table icmp_ingress_port {
+    key = {
+        standard_metadata.ingress_port: exact;
+    }
+
+    actions = {
+        set_src_icmp_ip;
+        NoAction;
+    }
+    size=64;
+    default_action=NoAction;
+}
+
+
+//test with h1 traceroute -n -w 0.5 -q 1 -T --sport=63402 --port=80 10.8.5.2
+# 49 "p4src/pipeline.p4" 2
+# 1 "p4src/ingress/rate_limiting_with_meters.p4" 1
+//METER RATE LIMITING
+
+// allows for bytes/seconds
+meter(meter_length, MeterType.bytes) meter1;
+meter(meter_length, MeterType.bytes) meter2;
+meter(meter_length, MeterType.bytes) meter3;
+meter(meter_length, MeterType.bytes) meter4;
+meter(meter_length, MeterType.bytes) meter5;
+meter(meter_length, MeterType.bytes) meter6;
+meter(meter_length, MeterType.bytes) meter7;
+meter(meter_length, MeterType.bytes) meter8;
+meter(meter_length, MeterType.bytes) meter9;
+meter(meter_length, MeterType.bytes) meter10;
+
+
+action calc_meter_index(){
+    //ipv4.protocol is used to differentiate different traffic types
+    hash(meta.meter_index, HashAlgorithm.crc16, (bit<1>)0, {hdr.ipv4.srcAddr, hdr.ipv4.dstAddr, meta.obf_type}, meter_length);
+}
+
+action meter1_action(){
+    meter1.execute_meter<bit<32>>(meta.meter_index, meta.meter_tag);
+}
+action meter2_action(){
+    meter2.execute_meter<bit<32>>(meta.meter_index, meta.meter_tag);
+}
+action meter3_action(){
+    meter3.execute_meter<bit<32>>(meta.meter_index, meta.meter_tag);
+}
+action meter4_action(){
+    meter4.execute_meter<bit<32>>(meta.meter_index, meta.meter_tag);
+}
+action meter5_action(){
+    meter5.execute_meter<bit<32>>(meta.meter_index, meta.meter_tag);
+}
+action meter6_action(){
+    meter6.execute_meter<bit<32>>(meta.meter_index, meta.meter_tag);
+}
+action meter7_action(){
+    meter7.execute_meter<bit<32>>(meta.meter_index, meta.meter_tag);
+}
+action meter8_action(){
+    meter8.execute_meter<bit<32>>(meta.meter_index, meta.meter_tag);
+}
+action meter9_action(){
+    meter9.execute_meter<bit<32>>(meta.meter_index, meta.meter_tag);
+}
+action meter10_action(){
+    meter10.execute_meter<bit<32>>(meta.meter_index, meta.meter_tag);
+}
+
+
+table meter_id_to_meter_read {
+    key = {
+        meta.bw : exact; //meter id, in range [1,10]
+        }
+    actions = {
+        meter1_action;
+        meter2_action;
+        meter3_action;
+        meter4_action;
+        meter5_action;
+        meter6_action;
+        meter7_action;
+        meter8_action;
+        meter9_action;
+        meter10_action;
+        NoAction;
+    }
+    size = 10;
+}
+
+//handles meter tags.. drops packets if sending rate is to high
+table m_filter {
+    key = {
+        meta.meter_tag : exact; // contains the meter value // green, yellow, red
+    }
+    actions = {
+        drop;
+        NoAction;
+    }
+    size = 3;
+}
+# 50 "p4src/pipeline.p4" 2
+
+
+// Functions to match obfuscation rules and set parameters.
+action set_types(){
+    //traceroute = type 1
+    meta.ping = 0; //type 2
+    meta.iperf = 0; // type 3
+    meta.tcp = 0; // type 4
+    meta.udp = 0; // type 5
+    meta.ipv4 = 0; // type 6
+}
+action set_parameters(bit<3> obf_type ,bit<8> path_id, bit<4>ttl_to_subtract ,bit<10> pack_loss, bit<16> bw){
+    meta.obf_type = obf_type;
+    meta.path_id = path_id;
+    //meta.w_size = w_size;
+    meta.ttl_to_subtract = ttl_to_subtract;
+    meta.pack_loss_rate = pack_loss;
+    //meta.meter_id = meter_id;
+    meta.bw = bw;
+}
+table consider_flow {
+    //if destination is consideret, match them with types set in consider_srcAddr.
+    key = {
+        hdr.ipv4.srcAddr : range;
+        hdr.ipv4.dstAddr : range;
+        meta.ping : ternary; //type 2
+        meta.iperf : ternary; // type 3
+        meta.tcp : ternary; // type 4
+        meta.udp : ternary; // type 5
+        meta.ipv4 : ternary; // type 6
+        hdr.ipv4.ttl : ternary; //traceroute, zype 1
+    }
+    actions = {
+        NoAction;
+        set_parameters;
+    }
+}
+
+
+    apply {
+
+        /************* Routing ***********/
+        // srcRouting Header received, forward respectively- nothing else.
+        if(hdr.srcRoutes[0].isValid()){
+            if(hdr.srcRoutes[0].bos == 1) { //bos: bottom of stack
+                srcRoute_finish();
+            }
+            // Pop's srcRoutes[0] and sets egress port
+            srcRoute_nhop();
+            return;
+        }//END srcRoute
+
+
+
+        /************* CLASSIFY TRAFFIC TYPE ***********/
+        // initiate variables for classification
+        set_types();
+
+        // classify ipv4
+        if(hdr.ipv4.isValid()){
+            meta.ipv4 = 1;
+        }
+
+        // classify ping packets
+        if(hdr.icmp.isValid() && hdr.icmp.type == 8 && hdr.icmp.code == 0){
+            //echo type = 8, code = 0 ==> ping request
+            meta.ping = 1;
+        }else{
+            meta.ping = 0;
+        }
+
+        // classify UDP
+        if(hdr.ipv4.protocol == 17){
+            // UDP
+            meta.udp = 1;
+        }else{
+            meta.udp = 0;
+        }
+
+        // classify TCP, classify iperf
+        if(hdr.tcp.isValid()){
+            meta.tcp = 1;
+
+            // Check packet for default iperf values.
+            if(hdr.tcp.dstPort == 5001 || hdr.tcp.dstPort == 5201){
+                //iperf and iperf3 default port
+                meta.iperf = 1;
+            }else if(hdr.payload.isValid()){
+                //check payload for 0123456789 //default input for iperf v1
+                parse_payload();
+                if(iperf_payload.apply().hit){
+                    //default iperf1 payload of 0123456789 repeating..
+                    meta.iperf = 1;}
+            }
+
+
+            if(meta.iperf == 0){
+                //Packet has no default iperf values, check counting filter for mark.
+                calc_index_iperf_blom();
+                read_iperf_bloom();
+                if(meta.b_value1 > 0 && meta.b_value2 > 0){
+                    //Flow in iperf Bloom filter
+                    if(hdr.tcp.syn == 1 && hdr.tcp.ack == 0){
+                        // restart to classify new flow, packet cannot belong to iperf flow.
+                        remove_entry_in_iperf_bloom_filter();
+                        calc_index_iperf_sm();
+                        set_sm_to_start_state();
+                        store_tcp_mss();
+                        meta.iperf = 0;
+
+                    }else if(hdr.tcp.rst == 1 || hdr.tcp.fin == 1){
+                        // end of iperf flow, remove from bloom filter
+                        remove_entry_in_iperf_bloom_filter();
+                        meta.iperf = 1;
+                    }else{
+                        // packet belongs to marked iperf flow
+                        meta.iperf = 1;}
+
+                }else{
+                    //Flow NOT in iperf bloom filter
+                    calc_index_iperf_sm();
+                    read_iperf_sm_state();
+                    if(hdr.tcp.syn == 1 && hdr.tcp.ack == 0){
+                        //start sm to classify new flow
+                        set_sm_to_start_state(); //state<-0
+                        store_tcp_mss();
+
+                    }else if(meta.sm_state == 3){
+                        // in default state. Stay there.
+                        meta.iperf = 0;
+
+                    }else if(meta.sm_state == 0){
+                        //in start state
+                        if(hdr.tcp.ack == 1 && !hdr.payload.isValid()){
+                            //Ack response to SynAck from iperf server.
+                            set_sm_to_handshake_completed_state(); //state<-1
+                        }else{
+                            set_sm_to_default_state();} //state<-3
+
+                    }else if(meta.sm_state == 1){
+                        //in handshake completed state
+                        if(hdr.tcp.ack == 1 && hdr.tcp.psh == 1 && (meta.tcp_payload_len == 24 || meta.tcp_payload_len == 37)){
+                            //24 bytes for iperf header, 37bytes for iperf3 header
+                            //store_iperf_flow_id();
+                            set_sm_to_id_send_state(); //state<-2
+                        }else{
+                            set_sm_to_default_state();} //state<-3
+
+                    }else if(meta.sm_state == 2){
+                        //in iperf header send state
+                        set_sm_to_default_state(); //reset sm for new flows anyways..// state<-3
+                        read_tcp_mss_from_storage();
+                        bit<16> mss = meta.tcp_mss - (((bit<16>)hdr.tcp.dataOffset-5) * 4);
+
+                        if(meta.tcp_payload_len == mss || meta.tcp_payload_len == 1446 || meta.tcp_payload_len == 9448){
+                            // iperf1 & iperf3 send maximum sized packet.
+                            set_entry_in_iperf_bloom_filter();
+                            meta.iperf = 1;
+                        }
+                    }
+                }
+            }//END iperf classification
+        }else{
+            meta.tcp = 0;
+        }//END tcp classification
+
+
+        ///// All Flows Are Now Classified
+
+
+        // Match classified packet with obfuscation rules
+        if(consider_flow.apply().hit){
+
+            // Obfuscate packet by given parameters..
+            bit<8> switches_traversed = (bit<8>)meta.ttl_to_subtract + 1;
+            if((switches_traversed < hdr.ipv4.ttl) || meta.obf_type == 1){
+                // traceroute packet only enter here when they have to be obfuscated.
+
+                // whaaaat?---> because traceroute is tcp,
+                //and therefore would create problems when considering tcp.. same for UDP
+
+                // SET SOURCE ROUTING HEADER FOR PATH/LATENCY MANIPULATION
+                path_id_to_path.apply();
+                //substract correct ttl!
+
+                // SET PACKET LOSS
+                if (meta.pack_loss_rate == 0){
+                    // no packet loss
+                }else{
+                    bit<10> probability;
+                    random(probability, 10w1, 10w1000); //get random number inrange [1,100], inclusive
+                    if (probability <= meta.pack_loss_rate) { //random uniformly distributed..
+                        drop();
+                        return;
+                    }
+                }
+
+                // SET THROUGHPUT VARIABLES
+                if(meta.bw == 0){
+                    //don't change bandwidth
+                }else{
+                        // find meter counter belonging to packet
+                        calc_meter_index();
+                        // next, update responsible meter
+                        meter_id_to_meter_read.apply();
+                        //drops packet if rate exceeded
+                        m_filter.apply();
+                }
+            }else{
+                // Packet is a traceroute packet, but there is no rule for it
+                // it will be drop inside our network, but traceroute is not considered so we leave it pass
+                // This allows us to obfuscate udp/ tcp traffic for the destination
+                // without having any influence on the traceraute (might also be udp/tcp).
+                meta.src_routing = 0;
+            }
+        }//end if(rule == matched)
+
+        // No rule for (src,dst) flow, handle as normal ipv4 traffic.
+        if (meta.src_routing == 0 && !hdr.srcRoutes[0].isValid()){
+
+            // Traceroute response
+            if (hdr.ipv4.isValid() && (hdr.ipv4.ttl == 1 || hdr.ipv4.ttl ==0) ){ //==0 will be from routed packet.. ignored by consider_flow table
+                hdr.ipv4.ttl =1; //hack, correction
+
+                // Set new headers valid
+                hdr.ipv4_icmp.setValid();
+                hdr.icmp.setValid();
+
+                // Set egress port == ingress port
+                standard_metadata.egress_spec = standard_metadata.ingress_port;
+
+                //Ethernet: Swap map addresses
+                bit<48> tmp_mac = hdr.ethernet.srcAddr;
+                hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
+                hdr.ethernet.dstAddr = tmp_mac;
+
+                //Building new Ipv4 header for the ICMP packet
+                // By keeping ipv4_icmp as old and change ipv4 to new
+                //Copy original header (for simplicity)
+                hdr.ipv4_icmp = hdr.ipv4;
+                //Set destination address as traceroute originator
+                hdr.ipv4.dstAddr = hdr.ipv4_icmp.srcAddr;
+                //Set src IP to the IP assigned to the switch interface
+                icmp_ingress_port.apply(); //set by routing-controller
+
+                //Set protocol to ICMP
+                hdr.ipv4.protocol = 1;
+                //Set default TTL
+                hdr.ipv4.ttl = 65; //will result in 64 after ipv4_lpm table
+
+                //Create ICMP header with, unused stais unused
+                hdr.icmp.type = 11;
+                hdr.icmp.code = 0;
+
+                //set icmp Data // reuse meta header
+                if(hdr.tcp.isValid()){
+                    //IP Length to 56 bytes (reply ip(20) + ICMP(8) + received IP header(20) + 8 bytes of data)
+                    hdr.ipv4.totalLen = 56;
+                    meta.int1 = hdr.tcp.srcPort;
+                    meta.int2 = hdr.tcp.dstPort;
+                    meta.int3 = hdr.tcp.seqNo[31:16];
+                    meta.int4 = hdr.tcp.seqNo[15:0];
+                    //make sure all the packets are length 70.. so wireshark does not complain when tpc/uds options,etc
+                    truncate((bit<32>)70);
+                }else if(hdr.udp.isValid()){
+                    //IP Length to 56 bytes (reply ip(20) + ICMP(8) + received IP header(20) + 8 bytes of data)
+                    hdr.ipv4.totalLen = 56;
+                    meta.int1 = hdr.udp.srcPort;
+                    meta.int2 = hdr.udp.dstPort;
+                    meta.int3 = hdr.udp.len;
+                    meta.int4 = hdr.udp.checksum;
+                    //make sure all the packets are length 70.. so wireshark does not complain when tpc/uds options,etc
+                    truncate((bit<32>)70);
+                }else{
+                    hdr.ipv4_icmp.setInvalid();
+                }
+            }//END Traceroute
+
+            // PING response
+            //check if ping is for me by is_it_me.apply()
+            if(hdr.icmp.isValid() && meta.ping == 1 && is_it_me.apply().hit){
+                //reply to ping echo request
+
+                // Set egress port == ingress port
+                standard_metadata.egress_spec = standard_metadata.ingress_port;
+
+                //Ethernet: Swap map addresses
+                bit<48> tmp_mac = hdr.ethernet.srcAddr;
+                hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
+                hdr.ethernet.dstAddr = tmp_mac;
+                //Ip
+                bit<32> tmp_ip = hdr.ipv4.srcAddr;
+                hdr.ipv4.srcAddr = hdr.ipv4.dstAddr;
+                hdr.ipv4.dstAddr = tmp_ip;
+
+                hdr.ipv4.ttl = 65; //will result in 64 after ipv4_lpm
+                // icmp to echo reply
+                hdr.icmp.type = 0;
+                hdr.icmp.code = 0;
+            }//END echo response
+            //ipv4 routing
+            if(hdr.ipv4.isValid()) {
+                // classify ipv4
+                // meta.ipv4 = 1;
+                // simple routing based on shortest path given by controller.
+                ipv4_lpm.apply(); // sets path length-> meta.nr_of_hops = total ttl lost on path
+            }
+        }//END of NOT considered flows
+    }
+}
+
+/*************************************************************************
+****************  E G R E S S   P R O C E S S I N G   *******************
+*************************************************************************/
+
+control MyEgress(inout headers hdr,
+                 inout metadata meta,
+                 inout standard_metadata_t standard_metadata) {
+
+    apply {
+
+        if (hdr.tcp.isValid()) {
+            // Values set for tcp checksum || little Hack here ;)
+            meta.reserved = 0;
+            meta.tcp_totalLen = hdr.ipv4.totalLen - 20;
+        }
+    }
+}
+
+/*************************************************************************
+*************   C H E C K S U M    C O M P U T A T I O N   **************
+*************************************************************************/
+
+control MyComputeChecksum(inout headers hdr, inout metadata meta) {
+    apply {
+     update_checksum(
+         hdr.ipv4.isValid(),
+                { hdr.ipv4.version,
+               hdr.ipv4.ihl,
+                  hdr.ipv4.dscp,
+                  hdr.ipv4.ecn,
+                  hdr.ipv4.totalLen,
+                  hdr.ipv4.identification,
+                  hdr.ipv4.flags,
+                  hdr.ipv4.fragOffset,
+                  hdr.ipv4.ttl,
+                  hdr.ipv4.protocol,
+                  hdr.ipv4.srcAddr,
+                  hdr.ipv4.dstAddr },
+                  hdr.ipv4.hdrChecksum,
+                  HashAlgorithm.csum16);
+
+        //http://www.tcpipguide.com/free/t_TCPChecksumCalculationandtheTCPPseudoHeader-2.htm#Figure_218
+        update_checksum_with_payload(
+            hdr.tcp.isValid() && hdr.ipv4.isValid() && hdr.tcp_options.isValid(),
+            { hdr.ipv4.srcAddr,
+                hdr.ipv4.dstAddr,
+                meta.reserved,
+                hdr.ipv4.protocol,
+                meta.tcp_totalLen,
+                hdr.tcp.srcPort,
+                hdr.tcp.dstPort,
+                hdr.tcp.seqNo,
+                hdr.tcp.ackNo,
+                hdr.tcp.dataOffset,
+                hdr.tcp.res,
+                hdr.tcp.cwr,
+                hdr.tcp.ece,
+                hdr.tcp.urg,
+                hdr.tcp.ack,
+                hdr.tcp.psh,
+                hdr.tcp.rst,
+                hdr.tcp.syn,
+                hdr.tcp.fin,
+                hdr.tcp.window,
+                hdr.tcp.urgentPtr,
+                hdr.tcp_options.options,
+                hdr.payload.payload //needs to be added because we parsed it. If not valid, will be ignored
+            },
+            hdr.tcp.checksum,
+            HashAlgorithm.csum16);
+
+
+        //changed to with_payload
+        update_checksum( // for traceroute responses..
+            hdr.icmp.isValid() && (hdr.tcp.isValid() || hdr.udp.isValid()) && hdr.ipv4_icmp.isValid(),
+                { hdr.icmp.type,
+                  hdr.icmp.code,
+                  hdr.icmp.unused,
+                  hdr.ipv4_icmp.version,
+               hdr.ipv4_icmp.ihl,
+                  hdr.ipv4_icmp.dscp,
+                  hdr.ipv4_icmp.ecn,
+                  hdr.ipv4_icmp.totalLen,
+                  hdr.ipv4_icmp.identification,
+                  hdr.ipv4_icmp.flags,
+                  hdr.ipv4_icmp.fragOffset,
+                  hdr.ipv4_icmp.ttl,
+                  hdr.ipv4_icmp.protocol,
+                  hdr.ipv4_icmp.hdrChecksum,
+                  hdr.ipv4_icmp.srcAddr,
+                  hdr.ipv4_icmp.dstAddr,
+                  meta.int1,
+                  meta.int2,
+                  meta.int3,
+                  meta.int4
+                  },
+                  hdr.icmp.checksum,
+                  HashAlgorithm.csum16);
+
+
+
+        update_checksum_with_payload( // for ping echo responses & request
+            hdr.icmp.isValid() && !(hdr.tcp.isValid()) && !(hdr.udp.isValid()),
+                { hdr.icmp.type,
+                  hdr.icmp.code,
+                  hdr.icmp.unused
+                  },
+                  hdr.icmp.checksum,
+                  HashAlgorithm.csum16);
+
+    }
+}
+
+/*************************************************************************
+***********************  S W I T C H  *******************************
+*************************************************************************/
+
+//switch architecture
+V1Switch(
+MyParser(),
+MyVerifyChecksum(),
+MyIngress(),
+MyEgress(),
+MyComputeChecksum(),
+MyDeparser()
+) main;

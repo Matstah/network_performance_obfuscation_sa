@@ -1,0 +1,9 @@
+name of network: Uninett2011
+number of nodes: 66
+number of edges: 93
+average degree per node: 1.4090909090909092
+network size: 13989
+max link size: 1016
+min link size: 0
+median link size: 73.0
+average link site: 150.41935483870967

@@ -1,0 +1,9 @@
+name of network: UniC
+number of nodes: 15
+number of edges: 17
+average degree per node: 1.1333333333333333
+network size: 826.0
+max link size: 76.0
+min link size: 17.0
+median link size: 48.0
+average link site: 48.588235294117645

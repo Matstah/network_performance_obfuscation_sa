@@ -1,0 +1,9 @@
+name of network: BBNplanet
+number of nodes: 27
+number of edges: 28
+average degree per node: 1.037037037037037
+network size: 17830
+max link size: 3898
+min link size: 13
+median link size: 339.5
+average link site: 636.7857142857143

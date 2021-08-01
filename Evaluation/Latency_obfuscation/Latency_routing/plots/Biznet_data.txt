@@ -1,0 +1,9 @@
+name of network: Biznet
+number of nodes: 28
+number of edges: 32
+average degree per node: 1.1428571428571428
+network size: 3357
+max link size: 1046
+min link size: 30
+median link size: 76.0
+average link site: 104.90625

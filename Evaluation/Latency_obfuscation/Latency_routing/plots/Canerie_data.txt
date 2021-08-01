@@ -1,0 +1,9 @@
+name of network: Canerie
+number of nodes: 24
+number of edges: 33
+average degree per node: 1.375
+network size: 23005
+max link size: 2796
+min link size: 93
+median link size: 537.0
+average link site: 697.1212121212121

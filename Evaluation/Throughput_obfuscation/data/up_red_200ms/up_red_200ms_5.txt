@@ -1,0 +1,27 @@
+Connecting to host 10.10.3.2, port 5201
+[  4] local 10.1.1.2 port 42162 connected to 10.10.3.2 port 5201
+[ ID] Interval           Transfer     Bandwidth       Retr  Cwnd
+[  4]   0.00-1.00   sec   322 KBytes  2.64 Mbits/sec    0    113 KBytes       
+[  4]   1.00-2.00   sec   704 KBytes  5.77 Mbits/sec   65    154 KBytes       
+[  4]   2.00-3.00   sec   520 KBytes  4.26 Mbits/sec   24    119 KBytes       
+[  4]   3.00-4.00   sec   577 KBytes  4.73 Mbits/sec    0    129 KBytes       
+[  4]   4.00-5.00   sec   509 KBytes  4.17 Mbits/sec    8   91.9 KBytes       
+[  4]   5.00-6.00   sec   467 KBytes  3.82 Mbits/sec    0   72.1 KBytes       
+[  4]   6.00-7.00   sec   348 KBytes  2.84 Mbits/sec    0   77.8 KBytes       
+[  4]   7.00-8.00   sec   363 KBytes  2.99 Mbits/sec    0   77.8 KBytes       
+[  4]   8.00-9.00   sec   372 KBytes  3.04 Mbits/sec    0   77.8 KBytes       
+[  4]   9.00-10.00  sec   368 KBytes  3.01 Mbits/sec    0   80.6 KBytes       
+[  4]  10.00-11.00  sec   379 KBytes  3.11 Mbits/sec    0   89.1 KBytes       
+[  4]  11.00-12.00  sec   455 KBytes  3.73 Mbits/sec    0    106 KBytes       
+[  4]  12.00-13.00  sec   557 KBytes  4.56 Mbits/sec    0    136 KBytes       
+[  4]  13.00-14.00  sec   573 KBytes  4.69 Mbits/sec   25    115 KBytes       
+[  4]  14.00-15.00  sec   594 KBytes  4.87 Mbits/sec    0    136 KBytes       
+[  4]  15.00-16.00  sec   570 KBytes  4.67 Mbits/sec   16    103 KBytes       
+[  4]  16.00-17.00  sec   515 KBytes  4.21 Mbits/sec    0    115 KBytes       
+[  4]  17.00-18.00  sec   563 KBytes  4.61 Mbits/sec    0    120 KBytes       
+[  4]  18.00-19.00  sec   554 KBytes  4.54 Mbits/sec    0    120 KBytes       
+[  4]  19.00-20.00  sec   469 KBytes  3.85 Mbits/sec   10   90.5 KBytes       
+- - - - - - - - - - - - - - - - - - - - - - - - -
+[ ID] Interval           Transfer     Bandwidth       Retr
+[  4]   0.00-20.00  sec  9.55 MBytes  4.01 Mbits/sec  148             sender
+[  4]   0.00-20.00  sec  9.20 MBytes  3.86 Mbits/sec                  receiver

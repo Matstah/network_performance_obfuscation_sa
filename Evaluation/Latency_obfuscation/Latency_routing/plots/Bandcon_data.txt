@@ -1,0 +1,9 @@
+name of network: Bandcon
+number of nodes: 21
+number of edges: 28
+average degree per node: 1.3333333333333333
+network size: 34365
+max link size: 6223
+min link size: 67
+median link size: 614.0
+average link site: 1227.3214285714287

@@ -1,0 +1,9 @@
+name of network: SwitchL3
+number of nodes: 30
+number of edges: 51
+average degree per node: 1.7
+network size: 3586.0
+max link size: 225.0
+min link size: 1.0
+median link size: 53.0
+average link site: 70.3137254902
